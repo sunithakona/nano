@@ -5,19 +5,15 @@ from sql_queries import copy_table_queries, insert_table_queries
 
 def load_staging_tables(cur, conn):
     for query in copy_table_queries:
-        print(query)
         cur.execute(query)
         conn.commit()
 
 
 def insert_tables(cur, conn):
     for query in insert_table_queries:
-        print(query)
         cur.execute(query)
         conn.commit()
 
-print(copy_table_queries)
-print(insert_table_queries)
 
 # %%
 def main():
@@ -50,7 +46,7 @@ DWH_PORT = config.get("CLUSTER","DB_PORT")
 DWH_ENDPOINT = config.get("CLUSTER","HOST")
 
 %load_ext sql
-conn_string1='postgresql://{}:{}@{}:{}/{}'.format(DWH_DB_USER, DWH_DB_PASSWORD, DWH_ENDPOINT, DWH_PORT,DWH_DB)
+conn_string='postgresql://{}:{}@{}:{}/{}'.format(DWH_DB_USER, DWH_DB_PASSWORD, DWH_ENDPOINT, DWH_PORT,DWH_DB)
 print(conn_string)
 %sql $conn_string
 

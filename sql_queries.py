@@ -116,25 +116,20 @@ CREATE TABLE time(
 )
 """)
 
-staging_events_copy = ("""
-    copy {} from {}
-    credentials 'aws_iam_role={}'
-    format as json {}
-    region 'us-west-2';
-""").format('staging_events',config.get("S3", "LOG_DATA"),config.get("IAM_ROLE", "ARN"),config.get("S3", "LOG_JSONPATH"))
+table = 'staging_events'
+s3_loc = config.get("S3", "LOG_DATA")
+iam_role = config.get("IAM_ROLE", "ARN")
+json_path = config.get("S3", "LOG_JSONPATH")
+
+staging_events_copy = f"copy {table} from {s3_loc} credentials 'aws_iam_role={iam_role}' format as json {json_path} region 'us-west-2'"
 
 
+table = 'staging_songs'
+s3_loc = config.get("S3", "SONG_DATA")
+iam_role = config.get("IAM_ROLE", "ARN")
 
-print(staging_events_copy)
+staging_songs_copy = f"copy {table} from {s3_loc} credentials 'aws_iam_role={iam_role}' json 'auto' region 'us-west-2'"
 
-
-staging_songs_copy = ("""
-    copy {} from {}
-    credentials 'aws_iam_role={}'
-    json 'auto' region 'us-west-2';
-""").format('staging_songs',config.get("S3", "SONG_DATA"),config.get("IAM_ROLE", "ARN"))
-
-print(staging_songs_copy)
 # FINAL TABLES
 
 songplay_table_insert = ("""
@@ -165,18 +160,14 @@ songplay_table_insert = ("""
 
 user_table_insert = ("""
     insert into users
-    select distinct es.userId, 
-           es.firstName, 
-           es.lastName, 
-           es.gender, 
-           es.level
-    from staging_events es
-    join (
-        select userId
-        from staging_events
-        where page = 'NextSong'
-        group by userId
-    ) es2 on es.userId = es2.userId 
+    select distinct es1.userId, 
+           es1.firstName, 
+           es1.lastName, 
+           es1.gender, 
+           es1.level
+    from staging_events es1
+    inner join staging_events es2 
+    ON es1.userId = es2.userId and es1.page = 'NextSong'      
 """)
 
 
@@ -212,15 +203,27 @@ time_table_insert = ("""
 """)
 
 artist_table_insert = ("""
-    insert into artists
-    select distinct
-        artist_id,
-        artist_name as name,
-        artist_location as location,
-        artist_latitude as latitude,
-        artist_longitude as longitude
-    from staging_songs
+    INSERT INTO artists
+    WITH added_row_number
+     AS (SELECT *,
+                Row_number()
+                  over(
+                    PARTITION BY artist_name
+                    ORDER BY year DESC) AS row_number
+         FROM   staging_songs)
+    SELECT artist_id,
+       artist_name      AS name,
+       artist_location  AS location,
+       artist_latitude  AS latitude,
+       artist_longitude AS longitude
+    FROM   added_row_number
+    WHERE  row_number = 1; 
 """)
+
+
+
+
+
 
 # %%
 # QUERY LISTS
