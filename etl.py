@@ -49,12 +49,10 @@ DWH_DB_PASSWORD= config.get("CLUSTER","DB_PASSWORD")
 DWH_PORT = config.get("CLUSTER","DB_PORT")
 DWH_ENDPOINT = config.get("CLUSTER","HOST")
 
-#%load_ext sql
+%load_ext sql
 conn_string1='postgresql://{}:{}@{}:{}/{}'.format(DWH_DB_USER, DWH_DB_PASSWORD, DWH_ENDPOINT, DWH_PORT,DWH_DB)
-conn_string = 'postgresql://awsuser:Jishnu8703@mydwhcluster.crsvwraithvq.us-west-2.redshift.amazonaws.com:5439/dev' 
-print(conn_string1)
 print(conn_string)
-#%sql $conn_string
+%sql $conn_string
 
 
 
@@ -85,6 +83,5 @@ select COUNT(*) from time;
 # %%
 %%sql
 select COUNT(*) from songplay;
-
 
 
