@@ -21,121 +21,124 @@ time_table_drop = "DROP TABLE IF EXISTS time"
 
 staging_events_table_create= ("""
 CREATE TABLE staging_events(
-    artist VARCHAR(25),
-    auth VARCHAR(50) ,
-    firstName: VARCHAR(25),
+    artist VARCHAR,
+    auth VARCHAR ,
+    firstName VARCHAR,
     gender CHAR(1),
-    itemInSession INTEGER,
-    lastName VARCHAR(25),
-    length FLOAT,
-    level VARCHAR(25),
-    location VARCHA(50),
-    method VARCHAR(10),
-    page VARCHAR(25),
-    registration FLOAT,
-    sessionId INTEGER,
-    song: VARCHAR(50),
-    status INTEGER,
-    ts VARCHAR(25),
-    userAgent VARCHAR(100),
-    userId INTEGER)
+    itemInSession INT,
+    lastName VARCHAR,
+    length numeric,
+    level VARCHAR,
+    location VARCHAR,
+    method VARCHAR,
+    page VARCHAR,
+    registration VARCHAR,
+    sessionId INT,
+    song VARCHAR,
+    status INT,
+    ts VARCHAR,
+    userAgent VARCHAR,
+    userId INT)
 """)
 
 staging_songs_table_create = ("""                              
    CREATE TABLE staging_songs 
    (
-    num_songs INTEGER,
-    artist_id VARCHAR(25),
-    artist_latitude VARCHAR(25),
-    artist_longitude VARCHAR(25),
-    artist_location VARCHAR(50),
-    artist_name VARCHAR(25),
-    song_id VARCHAR(25),
-    title VARCHAR(25),
-    duration FLOAT,
-    year INTEGER
+    num_songs int not null,
+    artist_id VARCHAR not null,
+    artist_latitude VARCHAR,
+    artist_longitude VARCHAR,
+    artist_location VARCHAR,
+    artist_name VARCHAR,
+    song_id VARCHAR not null,
+    title VARCHAR not null,
+    duration float not null,
+    year int
     )
 """)
 
 songplay_table_create = ("""
-CREATE TABLE song_play
+CREATE TABLE songplay
 (
-    songplay_id INTEGER identity(0, 1) primary key, 
-    start_time DATETIME,
+    songplay_id INTEGER identity(0, 1), 
+    start_time TIMESTAMP sortkey,
     user_id INTEGER, 
-    level VARCHAR(25), 
-    song_id VARCHAR(25), 
-    artist_id VARCHAR(25),
+    level VARCHAR, 
+    song_id VARCHAR, 
+    artist_id VARCHAR,
     session_id INTEGER, 
-    location VARCHAR(50),
-    user_agent VARCHAR(100)
+    location VARCHAR,
+    user_agent VARCHAR
 )
 """)
 
 user_table_create = ("""
 CREATE TABLE users
 (
-    user_id INTEGER, 
-    first_name VARCHAR(25),
-    last_name VARCHAR(25),
-    gender CHAR(1)
-    level VARCHAR(25)       
+    user_id INTEGER sortkey, 
+    first_name VARCHAR,
+    last_name VARCHAR,
+    gender CHAR(1),
+    level VARCHAR       
 )
 """)
 
 song_table_create =  ("""
 CREATE TABLE songs
 (
-    song_id INTEGER, 
-    title VARCHAR(25),
-    artist_id INTEGER,
+    song_id VARCHAR sortkey, 
+    title VARCHAR,
+    artist_id VARCHAR,
     year INTEGER,
-    duration FLOAT       
+    duration float       
 )
 """)
 artist_table_create = ("""
 CREATE TABLE artists
 (
-    artist_id INTEGER, 
-    name VARCHAR(50),
-    location VARCHAR(50),
-    lattitude VARCHAR(25),
-    longitude VARCHAR(25)      
+    artist_id VARCHAR sortkey, 
+    name VARCHAR,
+    location VARCHAR,
+    lattitude VARCHAR,
+    longitude VARCHAR      
 )
 """)
 
 time_table_create = ("""
 CREATE TABLE time(
-    start_time DATETIME, 
+    start_time DATETIME sortkey, 
     hour INTEGER,
     day INTEGER,
     week INTEGER,
     month INTEGER,
     year INTEGER,
-    weekday VARCHAR(10)  
+    weekday VARCHAR 
 )
 """)
-
-# %%
-# STAGING TABLES
 
 staging_events_copy = ("""
     copy {} from {}
     credentials 'aws_iam_role={}'
-    gzip region 'us-west-2';
-""").format('staging_events',config.get("S3", "LOG_DATA"),config.get("IAM_ROLE", "ARN"))
+    format as json {}
+    region 'us-west-2';
+""").format('staging_events',config.get("S3", "LOG_DATA"),config.get("IAM_ROLE", "ARN"),config.get("S3", "LOG_JSONPATH"))
+
+
+
+print(staging_events_copy)
+
 
 staging_songs_copy = ("""
     copy {} from {}
     credentials 'aws_iam_role={}'
-    gzip region 'us-west-2';
+    json 'auto' region 'us-west-2';
 """).format('staging_songs',config.get("S3", "SONG_DATA"),config.get("IAM_ROLE", "ARN"))
 
+print(staging_songs_copy)
 # FINAL TABLES
 
-   
 songplay_table_insert = ("""
-    INSERT INTO songplay(songplay_id,  
+    INSERT INTO songplay(
     start_time,
     user_id, 
     level, 
@@ -145,31 +148,38 @@ songplay_table_insert = ("""
     location,
     user_agent)
     SELECT 
-        timestamp'epoch' + e.ts * interval '1 second' as start_time,
-        e.userId as user_id,
-        e.level,
-        s.song_id,
-        s.artist_id,
-        e.sessionId as session_id,
-        e.location,
-        e.userAgent as user_agent
-    from events_staging e
-    LEFT OUTER JOIN songs_staging s 
-    ON e.song = s.title and e.artist = s.artist_name
-    WHERE e.page = 'NextSong'
+        timestamp 'epoch' + es.ts/1000 * interval '1 second' as start_time,
+        es.userId as user_id,
+        es.level,
+        ss.song_id,
+        ss.artist_id,
+        es.sessionId as session_id,
+        es.location,
+        es.userAgent as user_agent
+    from staging_events es
+    LEFT OUTER JOIN staging_songs ss 
+    ON es.song = ss.title and es.artist = ss.artist_name
+    WHERE es.page = 'NextSong'
 """)
  
+
 user_table_insert = ("""
     insert into users
-    select eo.userId, eo.firstName, eo.lastName, eo.gender, eo.level
-    from events_staging eo
+    select distinct es.userId, 
+           es.firstName, 
+           es.lastName, 
+           es.gender, 
+           es.level
+    from staging_events es
     join (
         select userId
-        from events_staging
+        from staging_events
         where page = 'NextSong'
         group by userId
-    ) ei on eo.userId = ei.userId 
+    ) es2 on es.userId = es2.userId 
 """)
+
+
 
 song_table_insert = ("""
     insert into songs
@@ -179,19 +189,9 @@ song_table_insert = ("""
         artist_id,
         year,
         duration
-    from songs_staging
+    from staging_songs
 """)
 
-artist_table_insert = ("""
-    insert into artists
-    select distinct
-        artist_id,
-        artist_name as name,
-        artist_location as location,
-        artist_latitude as latitude,
-        artist_longitude as longitude
-    from songs_staging
-""")
 
 time_table_insert = ("""
     insert into time
@@ -206,23 +206,34 @@ time_table_insert = ("""
     from (
         select distinct
             timestamp 'epoch' + ts / 1000 * interval '1 second' as start_time
-        from events_staging
+        from staging_events
         where page = 'NextSong'
     ) ti
+""")
+
+artist_table_insert = ("""
+    insert into artists
+    select distinct
+        artist_id,
+        artist_name as name,
+        artist_location as location,
+        artist_latitude as latitude,
+        artist_longitude as longitude
+    from staging_songs
 """)
 
 # %%
 # QUERY LISTS
 
-# create_table_queries = [staging_events_table_create, staging_songs_table_create, songplay_table_create, user_table_create, song_table_create, artist_table_create, time_table_create]
-# drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
-# copy_table_queries = [staging_events_copy, staging_songs_copy]
-# insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert, artist_table_insert, time_table_insert]
-
-create_table_queries = [staging_events_table_create]
+create_table_queries = [staging_events_table_create, staging_songs_table_create, songplay_table_create, user_table_create, song_table_create, artist_table_create, time_table_create]
 drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
-copy_table_queries = [staging_events_copy]
-insert_table_queries = [songplay_table_insert]
+copy_table_queries = [staging_events_copy, staging_songs_copy]
+insert_table_queries = [songplay_table_insert, user_table_insert, song_table_insert, artist_table_insert, time_table_insert]
+
+# create_table_queries = [staging_events_table_create]
+# drop_table_queries = [staging_events_table_drop, staging_songs_table_drop, songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop, time_table_drop]
+# copy_table_queries = [staging_events_copy]
+# insert_table_queries = [songplay_table_insert]
 
 
 
