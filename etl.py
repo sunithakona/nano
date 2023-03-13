@@ -18,6 +18,20 @@ def insert_tables(cur, conn):
         cur.execute(query)
         conn.commit()
 
+def printOutput(cur):
+    '''Prints output after the load is complete'''
+    staging_events_table_select = "SELECT COUNT(*) FROM staging_events;"
+    staging_songs_table_select = "SELECT COUNT(*) FROM staging_songs"
+    songplay_table_select = "SELECT COUNT(*) FROM songplay"
+    user_table_select = "SELECT COUNT(*) FROM users"
+    song_table_select = "SELECT COUNT(*) FROM songs"
+    artist_table_select = "SELECT COUNT(*) FROM artists"
+    time_table_select = "SELECT COUNT(*) FROM time" 
+    select_table_queries =[staging_events_table_select, staging_songs_table_select, songplay_table_select, user_table_select, song_table_select, artist_table_select, time_table_select]
+    for query in select_table_queries:
+        print(query)
+        cur.execute(query)
+        print(cur.fetchall()[0][0])       
 
 # %%
 def main():
@@ -31,59 +45,10 @@ def main():
     
     load_staging_tables(cur, conn)
     insert_tables(cur, conn)
-
-
+    print("host={} dbname={} user={} password={} port={}".format(*config['CLUSTER'].values()))
+    printOutput(cur)
     conn.close()
-
-
+    
 main()
-
-# %%
-import os 
-config = configparser.ConfigParser()
-config.read_file(open('dwh.cfg'))
-KEY=config.get('AWS','key')
-SECRET= config.get('AWS','secret')
-
-DWH_DB= config.get("CLUSTER","DB_NAME")
-DWH_DB_USER= config.get("CLUSTER","DB_USER")
-DWH_DB_PASSWORD= config.get("CLUSTER","DB_PASSWORD")
-DWH_PORT = config.get("CLUSTER","DB_PORT")
-DWH_ENDPOINT = config.get("CLUSTER","HOST")
-
-%load_ext sql
-conn_string='postgresql://{}:{}@{}:{}/{}'.format(DWH_DB_USER, DWH_DB_PASSWORD, DWH_ENDPOINT, DWH_PORT,DWH_DB)
-print(conn_string)
-%sql $conn_string
-
-
-
-# %%
-%%sql
-SELECT COUNT(*) FROM staging_events;
-
-# %%
-%%sql
-select COUNT(*) from staging_songs;
-
-# %%
-%%sql
-SELECT COUNT(*) FROM users;
-
-# %%
-%%sql
-select COUNT(*) from songs;
-
-# %%
-%%sql
-SELECT COUNT(*) FROM artists;
-
-# %%
-%%sql
-select COUNT(*) from time;
-
-# %%
-%%sql
-select COUNT(*) from songplay;
 
 
